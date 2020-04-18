@@ -16,5 +16,8 @@ namespace DatingApp.API.Data
         // Name of method is the name of table when scaffolding DB
         public DbSet<Value> Values { get; set; }
 
+        public DbSet<User> Users { get; set; }
+
+
     }
 }

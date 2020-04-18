@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using DatingApp.API.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -12,6 +14,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 
 namespace DatingApp.API
 {
@@ -26,6 +29,7 @@ namespace DatingApp.API
 
         // --------------------------This is where you add your services----------------------------
         // This method gets called by the runtime. Use this method to add services to the container.
+        // ORDER DOES NOT MATTER
         public void ConfigureServices(IServiceCollection services)
         {
             // This adds DbContext service - the option DefaultConnection is configured in appSettings.json
@@ -33,12 +37,33 @@ namespace DatingApp.API
             (Configuration.GetConnectionString("DefaultConnection")));
             
             services.AddControllers();
-
-            // Add Cors Service
             services.AddCors();
+
+            // IAuthRepository - Service created once per request in the scope - like Singleton but in scope itself
+            // Ex: creates one instance for each HTTP request - but uses the same instance for other calls within the same web request
+            services.AddScoped<IAuthRepository, AuthRepository>();
+
+            // Specify Authentication Scheme Application will use
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options => {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        // This is what you want to validate against - options
+                        ValidateIssuerSigningKey = true,
+
+                        // Tell Auth Scheme about this - pass in the key stored in the configuration
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII
+                            .GetBytes(Configuration.GetSection("AppSettings:Token").Value)),
+                        
+                        // Issuer is localhost and audience is localhost
+                        ValidateIssuer = false,
+                        ValidateAudience = false
+                    };
+                });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+        // ORDER MATTERS
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
@@ -48,12 +73,13 @@ namespace DatingApp.API
 
             // app.UseHttpsRedirection();
 
-            // Add Cors Middleware
-            app.UseCors(x => x.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
-
             app.UseRouting();
 
+            app.UseAuthentication();
             app.UseAuthorization();
+
+            // Add Cors Middleware
+            app.UseCors(x => x.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 
             app.UseEndpoints(endpoints =>
             {
